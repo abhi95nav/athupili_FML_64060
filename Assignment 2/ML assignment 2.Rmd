@@ -1,0 +1,196 @@
+---
+title: "Machine learning - Assignement 2: KNN- classifciation"
+output: 
+ pdf_document: default
+ html_document: default
+date: "10-02-2022"
+
+Description: "The purpose of this assignment is to use k-NN for classification."
+---
+```{r  setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+dir.create("images")
+```
+
+
+```{r}
+library(caret)
+library(ISLR)
+library(class)
+```
+
+```{r}
+getwd()
+setwd("/Users/thupiliabhinav/Desktop")
+bankdata<- read.csv("UniversalBank.csv")
+str(bankdata)
+```
+
+```{r}
+head(bankdata)
+summary(bankdata)
+```
+```{r}
+test.na <- is.na.data.frame('bankdata')
+test.na
+```
+
+```{r}
+library(dplyr)
+bankdata2<-bankdata %>%
+  select(Age, Experience, Income, Family, CCAvg, Education, Mortgage, Personal.Loan, Securities.Account,CD.Account, Online, CreditCard)
+
+head(bankdata2)
+
+```
+```{r}
+#converting numerical variables to characters and factors.
+bankdata2$Education<-as.character(bankdata2$Education)
+is.character(bankdata$Education)
+
+
+bankdata2$Personal.Loan <- as.factor(bankdata2$Personal.Loan)
+is.factor(bankdata2$Personal.Loan)
+```
+
+```{r}
+dummymodel <- dummyVars(~Education, data = bankdata2)
+head(predict(dummymodel, bankdata2))
+bankdata3 <- predict(dummymodel, bankdata2)
+```
+
+
+```{r}
+bankdata4 <- bankdata2[,-6]
+bankdata5 <- cbind(bankdata4,bankdata3)
+head(bankdata5)
+```
+
+```{r}
+set.seed(15)
+Train_index = createDataPartition(bankdata5$Personal.Loan,p=0.60, list = FALSE)
+Train_data = bankdata5[Train_index,]
+Validation_data = bankdata5[-Train_index,]
+```
+
+```{r}
+#creating test data for testing the model.
+Test_bankdata <- data.frame(Age = 40,Experience = 10,Income = 84,Family = 2,CCAvg = 2,Mortgage = 0,Securities.Account = 0,CD.Account = 0,Online = 1,CreditCard = 1, Education_1 = 0,Education_2 = 1,Education_3 = 0)
+Test_bankdata
+```
+
+```{r}
+
+
+training_model <- preProcess(Train_data[,-c(7, 12:14)], method=c("center", "scale"))
+model_train <- predict(training_model, Train_data)
+model_validate <- predict(training_model, Validation_data)
+model_test <- predict(training_model,Test_bankdata)
+summary(model_train)
+```
+```{r}
+#Predictors and Lables
+Train_Bank_Predictors <- model_train[,-7] 
+Validate_Bank_Predictors <- model_validate[,-7]
+
+Train_Bank_Label <- model_train[,7]
+Validate_Bank_Label <- model_validate[,7]
+
+K_NNmodel <- knn(Train_Bank_Predictors, model_test, cl= Train_Bank_Label, k=1)
+K_NNmodel
+
+
+
+#For K=1 The customer is not accepting loan since the value is 0.
+```
+
+```{r}
+set.seed(123)
+searchgrid <- expand.grid(k=c(1:40))
+trtcontrol = 
+model <- train(Personal.Loan~.,data=model_train,tuneGrid = searchgrid, method="knn", trControl = trainControl("cv"))
+model 
+
+best_k <- model$bestTune[[1]]
+```
+
+```{r}
+model_v <- knn(Train_Bank_Predictors,Validate_Bank_Predictors,cl=Train_Bank_Label, k=best_k)
+
+confusionMatrix(model_v,Validate_Bank_Label)
+```
+
+```{r}
+set.seed(123)
+banktraindata <- createDataPartition(bankdata5$Personal.Loan, p=0.5, list = FALSE)
+m_train_bankdata <- bankdata5[banktraindata,]
+m_test_bankdata <- bankdata5[-banktraindata,]
+
+bankdata7 <- createDataPartition(m_test_bankdata$Personal.Loan, p=0.6, list = FALSE)
+m_validate_bankdata <- m_test_bankdata[bankdata7,]
+m_test1_bankdata <- m_test_bankdata[-bankdata7,]
+```
+
+
+
+```{r}
+norm_bankdata <- preProcess(m_train_bankdata[,-c(7,12:14)], method = c("center", "scale"))
+
+bankdata_train <- predict(norm_bankdata, m_train_bankdata)
+bankdata_validate <- predict(norm_bankdata, m_validate_bankdata)
+bankdata_test <- predict(norm_bankdata, m_test1_bankdata)
+```
+
+
+
+```{r}
+#defining predictors and labels
+
+m_train_predictor <- bankdata_train[,-7]
+m_validate_predictor <- bankdata_validate[,-7]
+m_test_predictor <- bankdata_test[,-7]
+
+m_train_label <- bankdata_train[,7]
+m_validate_label<- bankdata_validate[,7]
+m_test_label <- bankdata_test[,7]
+
+```
+
+```{r}
+m_bankmodel <- knn(m_train_predictor, m_train_predictor, cl=m_train_label, k=best_k)
+head(m_bankmodel)
+```
+
+
+```{r}
+m_bankdatamodel <- knn(m_train_predictor, m_validate_predictor, cl=m_train_label, k=best_k)
+head(m_bankdatamodel)
+```
+
+
+```{r}
+m_bankmodel2 <- knn(m_train_predictor, m_test_predictor, cl=m_train_label, k=best_k)
+head(m_bankmodel2)
+```
+
+
+```{r}
+confusionMatrix(m_bankmodel, m_train_label)
+
+#Number of miscalculations = 0. Accuracy is 100% for training model.
+```
+
+
+```{r}
+confusionMatrix(m_bankdatamodel, m_validate_label)
+
+#Number of miscalculations = 68. Accuracy is 95% for validation model.
+```
+
+
+```{r}
+confusionMatrix(m_bankmodel2, m_test_label)
+
+#Number of miscalculations = 36. Accuracy is 96% for Test Model.
+```
+
