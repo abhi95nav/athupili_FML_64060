@@ -1,0 +1,153 @@
+---
+title: "ML.Assignement.3(Naive Bayes)"
+output: pdf_document
+date: "2022-10-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(caret)
+library(e1071)
+library(class)
+library(tidyverse)
+```
+
+
+```{r}
+#Importing data set for current environment.
+getwd()
+setwd("/Users/thupiliabhinav/Desktop/ML/Assignment 3")
+bankdata <- read.csv("UniversalBank.csv")
+str(bankdata)
+```
+```{r}
+#Converting Personal.Loan, Online, CreditCard to factors.
+
+bankdata$Online <- as.factor(bankdata$Online)
+is.factor(bankdata$Online)
+bankdata$CreditCard <- as.factor(bankdata$CreditCard)
+is.factor(bankdata$CreditCard)
+bankdata$Personal.Loan <- as.factor(bankdata$Personal.Loan)
+is.factor(bankdata$Personal.Loan)
+str(bankdata)
+
+```
+
+
+```{r}
+#Data partition into Training and Validation.
+set.seed(123)
+
+bankdata1 <- createDataPartition(bankdata$Personal.Loan, p=0.60, list = FALSE)
+train_bank <- bankdata[bankdata1,]
+validate_bank <- bankdata[-bankdata1,]
+
+```
+
+```{r}
+# Data Normalization.
+
+norm_data <- preProcess(train_bank[,-c(10,13,14)], method = c("center", "scale"))
+predict_tdata <- predict(norm_data, train_bank)
+predict_vdata <- predict(norm_data, validate_bank)
+
+```
+
+
+```{r}
+#A. Creating Pivot Table with Online as column variable and CC, Personal.Loan as row variables.
+
+pivot_bank<- ftable(predict_tdata$Personal.Loan, predict_tdata$Online, predict_tdata$CreditCard, dnn=c('Personal.loan','CreditCard', 'Online'))
+pivot_bank
+
+#B.Probability of Loan Acceptance (Loan=1) conditional on CC=1 and Online=1.
+
+prob_bank<-pivot_bank[4,2]/(pivot_bank[2,2]+pivot_bank[4,2])
+prob_bank
+```
+
+
+```{r}
+#C.probability for personal loan and Online.
+pivot_bank1<- ftable(predict_tdata$Personal.Loan,predict_tdata$Online,dnn=c('Personal.loan','Online'))
+pivot_bank1
+
+#C.probability for personal loan and CreditCard.
+pivot_bank2<- ftable(predict_tdata$Personal.Loan,predict_tdata$CreditCard, dnn=c('Personal.loan','CreditCard'))
+pivot_bank2
+
+```
+
+```{r}
+#D.(i).P(CC=1 | Loan= 1)
+prob_bank1<- pivot_bank2[2,2]/(pivot_bank2[2,2]+pivot_bank2[2,1])
+prob_bank1
+```
+
+
+```{r}
+#D.(ii).P(Online=1 | Loan=1)
+prob_bank2 <- pivot_bank1[2,2]/(pivot_bank1[2,2]+pivot_bank1[2,1])
+prob_bank2
+```
+
+
+```{r}
+#D.(iii).P(Loan=1)
+prob_bank3 <- ftable(predict_tdata[,10])
+prob_bank3
+prob_bank_3 <- prob_bank3[1,2]/(prob_bank3[1,2]+prob_bank3[1,1])
+prob_bank_3
+```
+
+
+```{r}
+#D.(iv).P(CC=1 | Loan=0)
+prob_bank4 <- pivot_bank2[1,2]/(pivot_bank2[1,2]+pivot_bank2[1,1])
+prob_bank4
+```
+
+
+```{r}
+#D.(v).P(Online=1 | Loan=0)
+prob_bank5 <- pivot_bank1[1,2]/(pivot_bank1[1,2]+pivot_bank1[1,1])
+prob_bank5
+```
+
+
+```{r}
+#D.(vi).P(Loan=0)
+prob_bank6 <- ftable(predict_tdata[,10])
+prob_bank6
+prob_bank_6 <- prob_bank6[1,1]/(prob_bank6[1,1]+prob_bank6[1,2])
+prob_bank_6                     
+```
+
+
+```{r}
+#E.Computing Naive Bayes using conditional probabilities derived from D.
+nb <- (prob_bank1*prob_bank2*prob_bank_3)/(prob_bank1*prob_bank2*prob_bank_3+prob_bank4*prob_bank5*prob_bank_6)
+nb
+```
+
+#F. Comparison of values between answers derived from B. and E.
+The probability derived from Bayes probability i.e., B. is 0.0984556 and the probability derived from Naive's Bayes i.e., is 0.1000. The comparison between Bayes and Naive bayes shows that Naive Bayes has a higher probability. 
+
+
+```{r}
+#G.Using Naive Bayes directly applied to the data.
+nb_model <-naiveBayes(Personal.Loan~Online+CreditCard, data = predict_tdata)
+nb_model
+
+#From the below table we can observe that for P(Loan=1| CC=1, Online=1), following values are to be considered - 0.096(Loan = 1), 0.6111(Online=1), 0.2916(CC=1). The values derived from the table to calculate Naive Bayes will be same as the value derived in E for calculating Naive Bayes but was calculated from Bayes probability.
+```
+
+
+
+
+
+
