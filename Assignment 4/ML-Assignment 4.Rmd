@@ -1,0 +1,93 @@
+---
+title: "ML-Assignment 4"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  word_document: default
+date: "2022-11-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(caret)
+library(tidyverse)
+library(factoextra)
+library(esquisse)
+set.seed(123)
+```
+
+
+```{r cars}
+getwd()
+setwd("/Users/thupiliabhinav/Desktop/ML/ML- Assignment 4")
+pharma <- read.csv("Pharmaceuticals.csv")
+
+```
+#a. Using only the numerical variables (1 to 9) to cluster the 21.
+```{r}
+norm_mean<- pharma %>% select('Market_Cap', 'Beta', 'PE_Ratio', 'ROE', 'ROA', 'Asset_Turnover', 'Leverage', 'Rev_Growth', 'Net_Profit_Margin')
+
+#Scaling the Data.
+norm_train <- preProcess(norm_mean, method = "range")
+norm_predict<-predict(norm_train, norm_mean)
+```
+
+```{r}
+fviz_nbclust(norm_predict, kmeans, method = "wss")
+fviz_nbclust(norm_predict, kmeans, method = "silhouette")
+```
+
+
+
+#From above we calculate kmeans optimal being k=2 
+```{r}
+k_means_2 <- kmeans(norm_predict, centers = 2, nstart = 25)
+k_means_2$centers
+```
+
+#Graphical representation of kmeans using cluster:
+```{r}
+fviz_cluster(k_means_2, data= norm_mean)
+```
+
+#Grouping of clusters with original data:
+```{r}
+k_cluster<- k_means_2$cluster
+group_k <- cbind(pharma,k_cluster)
+```
+
+#Calculating mean for both clusters:
+```{r}
+aggregate(group_k[,-c(1,2,12:14)],by=list(group_k$k_cluster),FUN="mean")
+```
+#b. Interpret the clusters with respect to the numerical variables used in forming the clusters.
+# From above we can observe through clustering by "WSS" and "Silhouette" optimal K is 2 
+#Cluster 1- has companies with High-Market_Cap, PE_Ratio, ROE, ROA and Net_Profit_Margin.
+#Cluster 2- has companies with Low- Market_Cap, PE_Ratio, ROE, ROA and Net_Profit_Margin.
+
+#Grouping of clusters with Original Data:
+```{r}
+groupk2<-cbind(group_k, pharma$Location,pharma$Exchange)
+```
+
+#c.Is there a pattern in the clusters with respect to the numerical variables (10 to 12)?
+#With respect to numerical values to columns (10 to 12) are as follows:
+
+#Analysis under column 10.Mediation_recommendation:
+#Mediation_recommendation under cluster 1 consists- a) hold recommedations-6 , b) buy recommendations-3, c) sell recommendations - 2
+##Mediation_recommendation under cluster 2 consists- a) buy recommendations-5 , b) hold recommedations-3, c) sell recommendations - 2
+
+#Analysis under columns 11.pharma$Location and 12.pharma$Exchange :
+#Majority of pharma locations in cluster-1 and cluster-2 are US- based and for pharma exchnage the mojority is NYSE for both the clusters.
+
+#d.Naming for each cluster using any or all of the variables in the dataset:
+#Cluster 1- With majority mediation recommendations being hold, this cluster is named as "HOLD CLUSTER".
+#Cluster 2- With majority mediation recommendations being buy, this cluster is named as "BUY CLUSTER".
+
+
+
+
