@@ -1,0 +1,214 @@
+---
+title: "Final Project"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  word_document: default
+date: "2022-11-27"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+dir.create("images")
+```
+
+#Packages used for the current environment:
+```{r}
+library(caret)
+library(class)
+library(tidyverse)
+library(dlookr)
+library(missRanger)
+library(factoextra)
+library(esquisse)
+
+```
+
+
+#1.Importing the dataset:
+```{r}
+data<-read.csv("fuel.csv")
+```
+
+#2. Removing insignnificant variables and selecting main attributes for clustering to understand Power generation:
+```{r}
+data_new<-data[,c(8,11:14,16)]
+str(data_new)
+```
+
+
+#3. Plotting missing values from the above dataset to check for missing values(Using the dlookr package): 
+#dlookr package helps visually plot how many values are missing from each variable in percentages. This helps to understand the dataset and decide whether the missing values must be imputed or removed.
+```{r}
+plot_na_pareto(data_new)
+```
+#The visual plot shows that fuel_cost_per_mmbtu has missing values of 32.9%. fuel_cost_per_mmbtu is an important predicting factor in understanding the heat generation and type of fuel sources. Therefore it is important to impute the missing values rather than completely removing them.
+
+
+
+#4. Imputing missing values in fuel_cost_per_mmbtu using missRanger package: #Imputation refers to replacing the missing values with different values that help complete the dataset. Imputation can be done in various methods. missRanger package imputes values of missing variables by using other variables as predictors. The process is repeated until the error rate stops improving.
+```{r}
+
+data_clean<- missRanger(data_new, formula = .~., num.trees = 100, seed = 3)
+```
+
+#5.Sampling data and splitting data: #The population dataset with observations of 608565 has sampled to sample of 2% by setting the seed value as (9596). 
+```{r}
+set.seed(9596)
+sample_data <- data_clean[sample(nrow(data_clean), size = 12000, replace = FALSE), ]
+```
+
+#6. Dataset has been partitioned into training and test sets with respect to the fuel_cost_per_mmbtu. Since fuel_cost_per_mmbtu helps understand how the heat output of the received fuel units behaves, the fuel cost has been set as an important factor in classifying the data.
+```{r}
+train_index <- createDataPartition(sample_data$fuel_cost_per_mmbtu, p=0.75, list = FALSE)
+train_data<- sample_data[train_index,]
+test_data<- sample_data[-train_index,]
+```
+
+#7.Subsetting numerical variables for the purpose of scaling and clustering:
+```{r}
+cluster_data <- train_data %>% select('fuel_received_units', 'fuel_mmbtu_per_unit', 'sulfur_content_pct', 'ash_content_pct', 'fuel_cost_per_mmbtu') #For the basis of clustering, the data set has been filtered to only represent only numerical variables
+
+cluster_train <- preProcess(cluster_data, method = c("center", "scale")) #Normalization of numerical values using center, scale. Center and scale was used as the mean values to 0 and standard deviation to 1. This reduces the impact of outliers in the data set as mean considers the lowest and  highest values to calculate the average.
+cluster_predict <- predict(cluster_train, cluster_data)
+summary(cluster_predict)
+```
+
+#8.Using the Silhouette method to find the optimal centers for clustering: 
+#Clustering refers to a grouping of similar objects under one group. K-means clustering algorithm clusters the groups with the help of the K value, where each k value represents what group represents based on the centers of the data set and how various data points behave around these centers. Therefore, it is important to ascertain the value of k. 
+
+#Silhoutte method is one such method that helps ascertain the value of k. silhouette method defines the values of the cluster based on how data points behave within its own cluster and how each cluster is different from other clusters. 
+
+#Understanding the Business objective: The dataset is classified based on fuel_cost_per_mmbtu; silhouette helps understand how the data points in the cluster behave to cost within each cluster and how they differ from other clusters. This helps to analyze each cluster based on heat output which is sulfur and ash content which helps in determining the optimal cluster.
+```{r}
+fviz_nbclust(cluster_predict, kmeans, method = "silhouette")
+```
+
+#9. Predicting clusters on k-means based on centers shown from silhouette method: 
+#With the help of silhouette, we have already determined the centers = 6.
+```{r}
+set.seed(9596)
+kmeans_data <- kmeans(cluster_predict, centers = 6, nstart = 25)
+```
+
+#10.plotting of clusters based on clusters formed with the numerical dataset:
+```{r}
+fviz_cluster(kmeans_data, data= cluster_data) 
+```
+
+#11.Binding the clusters formed to the original numeric variables dataset:
+#Binding of the clusters values to original data set helps us understand where all data points fall in different clusters.
+```{r}
+cluster_group<- kmeans_data$cluster
+group_cluster <- cbind(cluster_data, cluster_group)
+```
+
+#12. Checking the middlemost value of each cluster i.e., the median of each cluster: 
+#With the help of aggregate function-Median, it helps us determine the middle most value of each cluster.
+```{r}
+aggregate(group_cluster,by=list(group_cluster$cluster_group), FUN="median")
+```
+
+#Cluster 1 and Cluster 3 and 4: show a high fuel_mmbtu_per_unit median value with a lower median value of fuel_cost_per_mmbtu, which signifies that this cluster produces high heat for less cost. It also shows a significant amount of sulfur and ash content. 
+
+#Cluster 2 and #Cluster 5: Both clusters' median values show minimal heat output and cost incurred. The value of sulfur and ash output is shown as zero. 
+
+#Cluster 6: This cluster can be called an outlier as the median values of heat output is minimal, and the cost incurred is very high.
+ 
+
+
+#13. Binding the final cluster to each fuel_group_code to interpret the clusters: 
+#This helps us understand where all the data points of clustered data with respect to fuel sources used are classified.
+```{r}
+group_cluster$cluster_group <- as.factor(group_cluster$cluster_group)
+final_cluster<- cbind(group_cluster, train_data$fuel_group_code)
+head(final_cluster)
+```
+
+
+#14.Visual presentation of number of clusters formed showed in form of ggplot2:
+```{r}
+#esquisser()
+
+ggplot(final_cluster) +
+  aes(x = cluster_group, fill = `train_data$fuel_group_code`) +
+  geom_bar() +
+  scale_fill_brewer(palette = "YlOrBr", direction = 1) +
+  labs(
+    x = "Cluster groups",
+    title = "Number of Cluster formed"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 18L,
+    face = "bold",
+    hjust = 0.5),
+    axis.title.x = element_text(size = 16L,
+    face = "bold")
+  )
+```
+
+
+
+#15. The final dataset has been filtered to understand what each cluster represents: 
+#With the silhouette, we have already determined that each cluster has been classified based on the similarities of their data points. Therefore, filtering and understanding a few data points can help us conclude the overall behavior of the cluster. This can be used to find the optimal cluster for our business goal.
+
+#a. Cluster 1 shows coal is major source of heat produced and with minimal cost.
+```{r}
+cluster1<-final_cluster %>% select(fuel_mmbtu_per_unit,fuel_cost_per_mmbtu, cluster_group) %>% group_by(train_data$fuel_group_code) %>% arrange(desc(fuel_mmbtu_per_unit)) %>% filter(cluster_group == 1) %>% head()
+cluster1
+```
+
+#b.From the below representation, it is evident that even though cluster 3 has high heat output for minimal cost, both coal and petroleum coke have sulfur and ash output.
+```{r}
+cluster_imp<-final_cluster %>% select(fuel_mmbtu_per_unit,fuel_cost_per_mmbtu, sulfur_content_pct, ash_content_pct , cluster_group, `train_data$fuel_group_code`) %>% group_by(train_data$fuel_group_code) %>% arrange(desc(sulfur_content_pct))  %>% head() 
+cluster_imp
+```
+
+#c.From above since we already know that the median values of cluster 2 have zero sulfur and ash output. we can observe that their heat and cost are minimal, although one data point shows a high cost. This could be because this cluster has outliers.
+```{r}
+cluster2<-final_cluster %>% select(fuel_mmbtu_per_unit,fuel_cost_per_mmbtu, cluster_group, `train_data$fuel_group_code`) %>% filter(train_data$fuel_group_code =='natural_gas') %>%arrange(desc(fuel_mmbtu_per_unit)) %>% filter(cluster_group == 2) %>% head()
+cluster2
+```
+
+#d.This cluster is the same as cluster 1 as it is dominated by coal but petroleum coke has high heat output and low cost.
+```{r}
+cluster3<-final_cluster %>% select(fuel_mmbtu_per_unit,fuel_cost_per_mmbtu, cluster_group) %>% group_by(train_data$fuel_group_code) %>% arrange(desc(fuel_mmbtu_per_unit)) %>% filter(cluster_group == 3) %>% head()
+cluster3
+
+```
+
+#e.This cluster is the same as cluster 1 as it is dominated by coal with high heat output and minimal cost.
+```{r}
+cluster4<-final_cluster %>% select(fuel_mmbtu_per_unit,fuel_cost_per_mmbtu, cluster_group) %>% group_by(train_data$fuel_group_code) %>% arrange(desc(fuel_mmbtu_per_unit)) %>% filter(cluster_group == 4) %>% head()
+cluster4
+```
+
+
+#f.This cluster shows uniform characteristics with minimal heat and cost, and all data points in this cluster are represented by Natural gas. This could be called an optimal cluster for recommending current business problems.
+```{r}
+cluster5<-final_cluster %>% select(fuel_mmbtu_per_unit,fuel_cost_per_mmbtu, cluster_group) %>% group_by(train_data$fuel_group_code) %>% arrange(desc(fuel_mmbtu_per_unit)) %>% filter(cluster_group == 5) %>% head()
+cluster5
+```
+
+
+#g.This cluster has only 3 data points which signifies that it has outliers as the heat output is minimal, and the cost output is very high.
+```{r}
+cluster6<-final_cluster %>% select(fuel_mmbtu_per_unit,fuel_cost_per_mmbtu, cluster_group) %>% group_by(train_data$fuel_group_code) %>% arrange(desc(fuel_mmbtu_per_unit)) %>% filter(cluster_group == 6) 
+cluster6
+```
+
+
+
+
+
+
+
+
+
+
+
+
